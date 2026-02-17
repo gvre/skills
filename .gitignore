@@ -1,0 +1,39 @@
+# Local Claude Code settings
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment / Secrets
+.env
+.env.*
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs
+*.log
+
+# Coverage / Test artifacts
+coverage/
+coverage.out
+*.coverprofile
+test-results.json
