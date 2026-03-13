@@ -1,7 +1,7 @@
 ---
 name: go-developer
 description:
-  Comprehensive rules and best practices for writing modern Go 1.25+ projects.
+  You are an Expert Go Software Engineer with deep knowledge of modern Go 1.25+ best practices.
   Use when creating new Go projects, reviewing Go code, refactoring existing code,
   or when the user asks about Go modules, error handling, testing, concurrency, or modern Go features.
   Ensures code follows current best practices with proper tooling, interfaces,
@@ -10,7 +10,7 @@ disable-model-invocation: true
 license: MIT
 metadata:
   author: Giannis Vrentzos
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Go Developer
@@ -54,6 +54,81 @@ This guide covers:
 - Table-driven tests with `t.Run`
 - Interfaces for dependency injection
 - Explicit error handling (no panics for expected errors)
+
+## Project Overrides
+
+How tool settings are resolved depends on the task:
+
+- **Reviewing existing code / PRs:** Read `go.mod` (for go-version)
+  and `.golangci.yml` (for linter configuration) from the repository.
+  The project's actual configuration is the source of truth. Do not
+  override what the project already defines.
+- **Creating new projects:** Use the defaults below when no `go.mod`
+  exists yet.
+
+Local overrides (see "What Can Be Overridden") apply in both modes and
+take precedence over both the project config and the defaults below.
+
+### Defaults for New Projects
+
+| Setting              | Default                  |
+|----------------------|--------------------------|
+| go-version           | 1.25                     |
+| linter               | golangci-lint v2         |
+| linter-preset        | errcheck, govet, staticcheck, gosec, revive, goimports, misspell, unconvert, unparam, noctx |
+| test-assertions      | testify (optional)       |
+| logger               | slog                     |
+
+### What Can Be Overridden
+
+Overrides are not limited to the tool defaults above. A repository can
+provide **any** additional context that affects how this skill operates:
+
+- **Domain / business context:** what the service does, which external
+  systems it integrates with, critical business invariants the AI would
+  not know from reading code alone.
+- **Review behavior:** which priority levels to comment on, what to
+  skip, confidence threshold, maximum number of comments.
+- **Codebase state:** ongoing migrations, known tech debt that is
+  intentional, legacy patterns being phased out (so the AI does not flag
+  them).
+- **Team conventions:** patterns specific to this codebase that differ
+  from generic best practices.
+- **External caveats:** downstream consumers, deployment constraints,
+  known limitations in third-party dependencies.
+
+### How to Override
+
+Place overrides in whichever local rule file your agent platform uses:
+
+- **Cursor:** `.cursor/rules/go-overrides.mdc` (with `globs: "**/*.go"`)
+- **Claude Code:** `CLAUDE.md` at the repository root
+- **Generic / agentskills.io:** `AGENTS.md` at the repository root
+
+Only include what differs from the defaults or what adds context the
+AI cannot infer from the code.
+
+**Example override (works in any of the above files):**
+
+> **Go skill overrides for this repository:**
+>
+> Domain context:
+> This is an event-driven microservice consuming from Kafka and writing
+> to PostgreSQL. Exactly-once semantics matter — always flag missing
+> transaction boundaries or ack-before-process patterns.
+>
+> Review behavior:
+> - Only flag Priority 1 (Critical) and Priority 2 (Important) issues
+> - Do not comment on naming conventions or package organization
+> - Maximum 5 review comments per PR
+>
+> Codebase state:
+> - Migrating from go-kit to plain stdlib HTTP; mixed patterns in
+>   `internal/transport/` are intentional
+> - The `pkg/legacy/` directory will be removed after v3.0 launch
+>
+> Tool overrides (only when go.mod / .golangci.yml do not define them):
+> - test-assertions: none (use stdlib only)
 
 ## Module Configuration (go.mod)
 
@@ -131,7 +206,10 @@ func (s *Server) Start(ctx context.Context) error {
     g, ctx := errgroup.WithContext(ctx)
 
     g.Go(func() error {
-        return s.httpServer.ListenAndServe()
+        if err := s.httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+            return err
+        }
+        return nil
     })
 
     g.Go(func() error {
@@ -298,6 +376,7 @@ When creating Go code:
 - [ ] Errors wrapped with `fmt.Errorf("context: %w", err)`
 - [ ] `context.Context` passed as first parameter
 - [ ] `cancel()` called for every `WithCancel`/`WithTimeout`
+- [ ] `defer Close()` on DB rows, HTTP response bodies, file handles
 - [ ] Interfaces defined at consumer side, kept small
 - [ ] Table-driven tests with `t.Run`
 - [ ] `-race` flag used in CI
@@ -309,6 +388,30 @@ When creating Go code:
 
 ### For Code Reviewers
 
+**Review quality rules (apply before writing any comment):**
+
+- **Only comment when confident.** If you are uncertain whether
+  something is actually wrong, do not comment. A false positive wastes
+  more reviewer and author time than a missed suggestion.
+- **Signal over noise.** A review with 2 critical findings is more
+  valuable than one with 15 mixed-confidence suggestions. Fewer,
+  higher-quality comments.
+- **Default scope: Priority 1 and 2 only.** Do not comment on Priority
+  3 issues unless the repository overrides explicitly request it.
+- **Never comment on pure style preferences** that the configured
+  linter does not flag. If golangci-lint passes, the style is acceptable.
+- **Respect the codebase's current state.** If code is in a known
+  migration, uses legacy patterns being phased out, or has documented
+  tech debt, do not flag those patterns unless the override says
+  otherwise.
+- **Use domain context when available.** A missing transaction boundary
+  in a payment service is critical; the same issue in a CLI utility may
+  not be. Weigh findings against what the code actually does, not just
+  generic rules.
+- **Honor review behavior overrides.** If the repository sets a maximum
+  comment count, confidence threshold, or excludes certain categories,
+  follow those constraints strictly.
+
 When reviewing Go code, prioritize findings:
 
 **Priority 1 - Critical Issues (Must Fix):**
@@ -317,19 +420,84 @@ When reviewing Go code, prioritize findings:
 2. **Ignored errors** (silent failures, missing error checks)
 3. **Goroutine leaks** (goroutines that can never exit)
 4. **Data races** (shared state without synchronization)
+5. **Resource leaks** (missing `defer Close()` on DB rows, HTTP response bodies, file handles; missing `defer cancel()` on contexts)
 
 **Priority 2 - Important Improvements (Should Fix):**
 
 1. **Missing context propagation** (functions missing `ctx context.Context`)
-2. **Fat interfaces** (interfaces with too many methods)
-3. **Error wrapping** (errors without context)
-4. **Testing gaps** (missing table-driven tests, no race detection)
+2. **Error wrapping** (errors without context, missing `fmt.Errorf("...: %w", err)`)
+3. **Testing gaps** (missing table-driven tests, no race detection)
 
 **Priority 3 - Nice to Have (Consider Fixing):**
 
 1. **Naming conventions** (non-idiomatic names)
 2. **Package organization** (generic package names)
-3. **Performance** (unnecessary allocations, missing benchmarks)
+3. **Fat interfaces** (interfaces with too many methods — split them)
+4. **Performance** (unnecessary allocations, missing benchmarks). Escalate
+   to Priority 2 when the impact is concrete: hot-path allocations,
+   missing connection pooling, or blocking operations in goroutines
+   serving concurrent requests.
+
+## PR Review Workflow
+
+When asked to review a PR (by number, URL, or branch name):
+
+### Step 1: Gather context
+- Fetch the PR description, metadata, and diff using `gh pr view` and
+  `gh pr diff`
+- Read `go.mod` and `.golangci.yml` for the project's actual
+  configuration
+- Read any local overrides (`.cursor/rules/`, `AGENTS.md`, `CLAUDE.md`)
+- Identify which files changed and their purpose from the PR description
+
+### Step 2: Review
+- Apply the review quality rules and priority levels above
+- Assess changes against the PR's stated intention — flag deviations
+  from what the PR says it does, not just generic code quality
+- Ignore files excluded by local overrides (e.g. frozen directories)
+
+### Step 3: Present findings
+- Show findings to the user grouped by priority, with file paths and
+  line numbers
+- Do NOT post to GitHub until the user explicitly approves
+- If there are no findings worth flagging, say so — a clean review is
+  a valid outcome
+
+### Step 4: Post (only when approved)
+- Post each finding as a separate inline review comment on the specific
+  line in the PR
+- Use a single review submission (not individual comments) so the
+  author gets one notification, not N
+- Submit as a neutral `COMMENT` review, not `REQUEST_CHANGES`. The user
+  decides the disposition via follow-up commands below.
+
+### Follow-up commands
+These should work without repeating the full context:
+- **"re-review"** — fetch latest changes, review only new/modified
+  hunks, and present findings
+- **"approve"** — approve the PR with a constructive comment
+- **"request changes"** — submit the review requesting changes with a
+  summary of outstanding issues
+
+### Autonomous mode
+When running without a human in the loop (CI, GitHub Actions, bots),
+apply these defaults instead of the interactive steps above:
+- **Scope: Priority 1 and 2 only.** Do not comment on P3 issues.
+- **Maximum 5 review comments per PR.** If there are more findings,
+  post the 5 most critical and note the count of remaining issues in
+  the review summary.
+- **Post directly** — skip the preview step (Step 3). There is no user
+  to approve.
+- **Submit as `COMMENT`**, never `REQUEST_CHANGES` or `APPROVE`.
+- **If no P1 issues are found, do not post any review.** Silence means
+  approval from the autonomous reviewer.
+- **On new commits** to the same PR, re-review only the changed hunks.
+
+Repository overrides can widen or narrow these defaults (e.g. include
+P2, raise or lower the max comment count).
+
+> **Note:** Posting to GitHub requires `gh` CLI to be installed and
+> authenticated.
 
 ## Resources
 
