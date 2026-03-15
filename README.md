@@ -36,6 +36,10 @@ npx skills add gvre/skills --skill go-developer
 | `-l, --list` | List available skills without installing |
 | `-y, --yes` | Skip all confirmation prompts |
 
+## Project Overrides
+
+Both skills support per-repository overrides for domain context, review behavior, codebase state, and more — without modifying the global skill. See the [Overrides Guide](docs/overrides-guide.md) for complete examples you can copy into your repository.
+
 ## Usage
 
 Skills are invoked in AI coding agents using the `/` prefix followed by the skill name:
