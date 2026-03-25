@@ -10,7 +10,7 @@ disable-model-invocation: true
 license: MIT
 metadata:
   author: Giannis Vrentzos
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Go Developer
@@ -176,6 +176,9 @@ See [references/REFERENCE.md](references/REFERENCE.md) for a full 3-layer error 
 
 - ALWAYS wrap errors with `fmt.Errorf("context: %w", err)`
 - NEVER ignore errors (use `_` only when truly intentional, add a comment)
+- NEVER return `err.Error()` to API clients — return static, pre-defined messages; log the full error internally
+- NEVER wrap errors with full structs that may contain sensitive fields (passwords, tokens, PII) — select safe fields explicitly
+- Translate errors at API boundaries — map domain errors to HTTP/gRPC status codes in a dedicated translation function; never let raw upstream errors reach the response
 - Use `errors.Is` for sentinel errors, `errors.As` for typed errors
 - Define sentinel errors at the package level with `var Err... = errors.New(...)`
 - Panic only for programmer errors (nil pointer dereference, index out of bounds in init)
