@@ -9,8 +9,8 @@ description:
 disable-model-invocation: true
 license: MIT
 metadata:
-  author: Giannis Vrentzos
-  version: "1.2.0"
+  author: Giannis Vrentzos, Johee Michel
+  version: "1.2.1"
 ---
 
 # Go Developer
@@ -271,6 +271,28 @@ func (s *UserService) GetUser(ctx context.Context, id int64) (*app.User, error) 
 - Use `testing/synctest` (stable in 1.25) for concurrent code testing
 
 See [references/testing-guide.md](references/testing-guide.md) for comprehensive testing patterns, mocking, benchmarks, and fuzzing.
+
+### Verification gaps assistants often miss (explicit checklist)
+
+Apply these when **editing** Go code or **accepting** IDE/Copilot suggestions—not only on full PR review. They apply to any Go codebase.
+
+1. **Identifier shadowing (imports vs locals)**  
+   Short package names (`errors`, `context`, `log`, `http`, `url`, …) often collide with local variables or range identifiers (`for _, err := range` vs the `errors` package). After adding or renaming imports, scan the **entire function** (and nested blocks). Prefer renaming locals (`resolveErr`, `acc`, `line`) over renaming standard imports. Use whatever **shadowing / predeclared** checks the repo’s `.golangci.yml` enables; do not assume `go vet` alone catches every case.
+
+2. **Test control flow: success vs error paths**  
+   Assertions such as `require.NoError` / `assert.NoError` / `assert.Nil(err)` must run **only** on the success branch. In table-driven tests, an `else` that runs for “everything that is not the first error shape” can accidentally include **expected errors**. Structure branches explicitly (`if tt.wantErr != "" { … } else { assert.NoError(t, err) }`) or use early `continue`/returns in subtests so success checks cannot run for failure rows.
+
+3. **Assertions that belong after the loop**  
+   Aggregates (line counts, total bytes, “visited all items”, final index vs expected length) belong **after** `for` / `range` / `for scanner.Scan()` completes—not inside the loop—unless the test intentionally checks **per-iteration** behavior.
+
+4. **Assertions must match the unit under test**  
+   Expected side effects (log lines, mock calls, metrics, RPCs) must come from the **code path the test invokes**. A test that calls a small helper should not assert behavior that only a higher-level `Run`, `Start`, HTTP handler, or CLI `main` produces—and vice versa. If expectations “sound right” but the wrong function is called, fix the test subject or the expectations.
+
+5. **Docs vs code (behavioral claims)**  
+   Before stating in README or package docs that a field is “required”, a value “must not be empty”, or showing **exact** error strings, confirm against **constructors**, **config loaders**, **`Validate`/`Check` methods**, and tests. Either update the code or soften the documentation.
+
+6. **Run tests after substantive edits**  
+   Run `go test` on affected packages (or `./...`) after non-trivial changes; compilation is not enough for test logic.
 
 ## Logging (slog)
 
