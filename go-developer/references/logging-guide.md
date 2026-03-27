@@ -256,6 +256,52 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 ---
 
+## Redacting Sensitive Data
+
+Implement a `Redactor` interface so structs can be safely logged without leaking secrets:
+
+```go
+type Redactor interface {
+    Redact() any
+}
+
+type LoginRequest struct {
+    Username string
+    Password string
+}
+
+func (r LoginRequest) Redact() any {
+    return struct {
+        Username string `json:"username"`
+        Password string `json:"password"`
+    }{
+        Username: r.Username,
+        Password: "***REDACTED***",
+    }
+}
+```
+
+```go
+// ✅ Log the redacted version
+logger.Info("login attempt", "req", req.Redact())
+
+// ❌ NEVER log the raw struct — may contain passwords, tokens, PII
+logger.Info("login attempt", "req", req)
+```
+
+For incoming HTTP requests, strip sensitive headers before logging:
+
+```go
+func logSafeHeaders(r *http.Request) slog.Attr {
+    safe := r.Header.Clone()
+    safe.Del("Authorization")
+    safe.Del("Cookie")
+    return slog.Any("headers", safe)
+}
+```
+
+---
+
 ## Logging Best Practices
 
 - **Use `log/slog`** — not `fmt.Println`, not `log.Printf`, not third-party loggers unless you have a specific need
