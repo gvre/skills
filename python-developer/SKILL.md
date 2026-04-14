@@ -10,7 +10,7 @@ disable-model-invocation: true
 license: MIT
 metadata:
   author: Giannis Vrentzos
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Python Developer
@@ -36,6 +36,7 @@ This guide covers:
 | TypeIs for type narrowing | ❌ | ✅ | ✅ |
 | ReadOnly type hint | ❌ | ✅ | ✅ |
 | Improved REPL | ❌ | ✅ | ✅ |
+| Bracketless `except` (PEP 758) | ❌ | ❌ | ✅ |
 | Experimental JIT | ❌ | ❌ | ✅ |
 | Free-threaded (no-GIL) | ❌ | ❌ | ✅ |
 

@@ -15,6 +15,7 @@ Python 3.14 is the latest stable release with significant new features and impro
 - **PEP 649/749**: Deferred evaluation of annotations
 - **PEP 734**: Multiple interpreters in the standard library
 - **PEP 750**: Template string literals (t-strings)
+- **PEP 758**: Bracketless `except` expressions
 - **PEP 768**: Safe external debugger interface
 - **PEP 784**: Zstandard compression support
 - Experimental JIT compiler (in official binaries)
@@ -346,6 +347,30 @@ python -m asyncio pstree <PID>
 **New functions:**
 - `asyncio.capture_call_graph()`
 - `asyncio.print_call_graph()`
+
+### PEP 758: Bracketless `except` Expressions
+
+Parentheses are now optional when catching multiple exception types, as long as no `as` clause is used.
+
+```python
+# Old — still valid
+except (TimeoutError, ConnectionRefusedError):
+    ...
+
+# New — parentheses optional without `as`
+except TimeoutError, ConnectionRefusedError:
+    ...
+
+# `as` still requires parentheses
+except (TimeoutError, ConnectionRefusedError) as e:
+    ...
+```
+
+**Key rules:**
+- Both forms are semantically identical — purely a syntactic change
+- Parentheses remain **required** when using `as`
+- Fully backwards compatible — old parenthesized form continues to work
+- Does **not** reintroduce Python 2 semantics: in Python 2 `except Foo, e:` bound the exception to a variable; that interpretation is gone
 
 ### Incremental Garbage Collection
 
