@@ -10,7 +10,7 @@ disable-model-invocation: true
 license: MIT
 metadata:
   author: Giannis Vrentzos
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # Go Developer
@@ -414,16 +414,35 @@ When creating Go code:
 - **Honor review behavior overrides.** If the repository sets a maximum
   comment count, confidence threshold, or excludes certain categories,
   follow those constraints strictly.
+- **Findings are sensor data, not verdicts.** Never imply a change is safe
+  to merge because the review is clean — surface what you checked and what
+  you could not. Borrowed confidence is itself a risk. You may be one of
+  several reviewers on this PR; a clean result from you covers only the
+  priorities in this skill, not the PR as a whole.
+- **Stay in your lane.** Focus on the priorities defined here (Go
+  correctness, security, resource safety). Don't expand into generic
+  coverage another reviewer is better positioned to provide — independent,
+  specialized signal is more valuable than correlated overlap.
 
-When reviewing Go code, prioritize findings:
+### Review Priorities
+
+When reviewing Go code, first classify each changed file by blast radius:
+
+- **Critical** (auth, payments, crypto, data-deletion, DB migrations, anything handling untrusted input or PII): full rigor — escalate borderline findings up one priority level.
+- **Standard** (business logic, APIs, service layers): normal priority rules.
+- **Low** (config, docs, generated code, test-only changes): P1 only — do not nitpick.
+
+Then prioritize findings:
 
 **Priority 1 - Critical Issues (Must Fix):**
 
-1. **Security vulnerabilities** (SQL injection, hardcoded secrets, path traversal)
+1. **Security vulnerabilities** (SQL injection, hardcoded secrets, path traversal, prompt injection — untrusted/user-controlled text flowing into an LLM call without safeguards; this risk is latent in runtime data, not visible in the diff)
 2. **Ignored errors** (silent failures, missing error checks)
 3. **Goroutine leaks** (goroutines that can never exit)
 4. **Data races** (shared state without synchronization)
 5. **Resource leaks** (missing `defer Close()` on DB rows, HTTP response bodies, file handles; missing `defer cancel()` on contexts)
+6. **Newly suppressed security-linter checks** — `//nolint gosec` added in this diff; treat the suppressed warning as an active finding. Pre-existing suppressions are out of scope.
+7. **Suspicious test changes** — assertions weakened or rewritten to match new (possibly broken) behavior, tests deleted or marked `t.Skip`, coverage of the changed code path removed. When a diff changes both code and its tests, verify the tests still assert *correct* behavior, not just *current* behavior.
 
 **Priority 2 - Important Improvements (Should Fix):**
 
@@ -440,17 +459,28 @@ When reviewing Go code, prioritize findings:
    to Priority 2 when the impact is concrete: hot-path allocations,
    missing connection pooling, or blocking operations in goroutines
    serving concurrent requests.
+5. **Reinvention** — new code that reimplements an existing stdlib or internal helper instead of reusing it. Escalate to Priority 2 if the reimplemented helper handles security-sensitive logic.
+6. **Generic safety gate weakening** — unrelated `//nolint` without justification, skipped non-critical tests, relaxed coverage thresholds, loosened `.golangci.yml` config.
 
 ## PR Review Workflow
+
+> **Tip:** For PRs that touch multiple languages, use the **pr-reviewer** skill — it orchestrates language-specific review across Go, Python, and more in a single pass.
 
 When asked to review a PR (by number, URL, or branch name):
 
 ### Step 1: Gather context
 - Fetch the PR description, metadata, and diff using `gh pr view` and
   `gh pr diff`
+- **Fast-fail screening:** a sprawling diff, mass test rewrites, or a
+  vague/missing intent statement are themselves findings. Flag "PR too
+  large to review confidently — recommend splitting" rather than
+  rubber-stamping.
 - Read `go.mod` and `.golangci.yml` for the project's actual
   configuration
 - Read any local overrides (`.cursor/rules/`, `AGENTS.md`, `CLAUDE.md`)
+- Fetch existing review comments (`gh pr view --comments`) and skip
+  findings already raised by another reviewer or the author — don't
+  restate them
 - Identify which files changed and their purpose from the PR description
 
 ### Step 2: Review
