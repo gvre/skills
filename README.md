@@ -6,6 +6,7 @@ A collection of reusable [agent skills](https://docs.anthropic.com/en/docs/claud
 
 | Skill | Description |
 |-------|-------------|
+| [pr-reviewer](pr-reviewer/SKILL.md) | Language-agnostic PR review orchestrator. Detects languages in a diff, loads each language skill's review priorities, and applies shared quality rules, risk-tiering by blast radius, and review workflow in a single pass |
 | [python-developer](python-developer/SKILL.md) | Rules and best practices for modern Python 3.12+ projects, covering tooling, type hints, async patterns, testing, and security |
 | [go-developer](go-developer/SKILL.md) | Comprehensive rules and best practices for writing modern Go 1.25+ projects, covering tooling, interfaces, generics, concurrency, testing, and security |
 
@@ -22,6 +23,7 @@ This will install all skills from this repository to your Claude Code agent.
 ### Install Specific Skills
 
 ```
+npx skills add gvre/skills --skill pr-reviewer
 npx skills add gvre/skills --skill python-developer
 npx skills add gvre/skills --skill go-developer
 ```
@@ -36,15 +38,22 @@ npx skills add gvre/skills --skill go-developer
 | `-l, --list` | List available skills without installing |
 | `-y, --yes` | Skip all confirmation prompts |
 
+## PR Review
+
+The `pr-reviewer` skill is the entry point for reviewing pull requests across one or more languages. It detects the languages in a diff, reads the **Review Priorities** section from each relevant language skill (`go-developer`, `python-developer`, …), and runs a unified review with shared quality rules, risk-tiering by blast radius, and a consistent workflow. As you add new `<lang>-developer` skills, it picks up their priorities automatically.
+
+The language skills also retain a standalone review workflow, so invoking one directly (e.g. `/go-developer` then "review this PR") still works for single-language reviews.
+
 ## Project Overrides
 
-Both skills support per-repository overrides for domain context, review behavior, codebase state, and more — without modifying the global skill. See the [Overrides Guide](docs/overrides-guide.md) for complete examples you can copy into your repository.
+The skills support per-repository overrides for domain context, review behavior, codebase state, and more — without modifying the global skill. See the [Overrides Guide](docs/overrides-guide.md) for complete examples you can copy into your repository.
 
 ## Usage
 
 Skills are invoked in AI coding agents using the `/` prefix followed by the skill name:
 
 ```
+/pr-reviewer
 /python-developer
 /go-developer
 ```
